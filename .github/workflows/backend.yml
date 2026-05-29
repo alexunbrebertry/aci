@@ -7,7 +7,7 @@ jobs:
     - linux
     - x64
     - garalt
-    - garalt-run-1-1-ad3a
+    - garalt-run-1-1-5335
     timeout-minutes: 30
     environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name
       != github.repository && 'CICD_FOR_FORKED_REPO' || null }}
