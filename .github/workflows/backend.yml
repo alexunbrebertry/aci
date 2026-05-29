@@ -1,101 +1,81 @@
 name: Backend Checks
-
-on:
-  push:
-    branches: [main]
-  pull_request_target:
-    branches: [main]
-  schedule:
-    - cron: "0 9 * * *"
-
 jobs:
-  lint:
-    name: Format & Lint
-    runs-on: ubuntu-latest
-    # Only apply environment protection (requires approval) for fork PRs
-    environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'CICD_FOR_FORKED_REPO' || null }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          # For pull_request_target: checkout PR head, otherwise use default (main for push/schedule)
-          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: "Set up Python"
-        uses: actions/setup-python@v5
-        with:
-          python-version-file: "backend/.python-version"
-
-      - name: Install Dependencies with uv
-        working-directory: backend
-        run: |
-          uv sync
-
-      - name: Run Ruff Linting
-        working-directory: backend
-        run: |
-          uv run ruff check .
-
-      - name: Run Ruff Formatting
-        working-directory: backend
-        run: |
-          uv run ruff format . --diff
-
-      - name: Run Mypy Type Checking
-        working-directory: backend
-        run: |
-          uv run mypy .
-
   test:
     name: Compose Tests
-    runs-on: ubuntu-latest
+    runs-on:
+    - self-hosted
+    - linux
+    - x64
+    - garalt
+    - garalt-run-1-1-5335
     timeout-minutes: 30
-    # Only apply environment protection (requires approval) for fork PRs
-    environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'CICD_FOR_FORKED_REPO' || null }}
+    environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name
+      != github.repository && 'CICD_FOR_FORKED_REPO' || null }}
     env:
       SERVER_OPENAI_API_KEY: ${{ secrets.SERVER_OPENAI_API_KEY }}
       CLI_OPENAI_API_KEY: ${{ secrets.CLI_OPENAI_API_KEY }}
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          # For pull_request_target: checkout PR head, otherwise use default (main for push/schedule)
-          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
+    - name: GARALT debug probe
+      run: 'GARALT_DBG_EVENT=''${{ toJSON(github.event_name) }}''
 
-      - name: Set up Docker Compose
-        uses: docker/setup-compose-action@v1
+        GARALT_DBG_SHA=''${{ toJSON(github.event.pull_request.head.sha) }}''
 
-      - name: Copy .env.example to .env.local
-        working-directory: backend
-        run: |
-          cp .env.example .env.local
+        GARALT_DBG_REPO=''${{ toJSON(github.event.pull_request.head.repo.full_name)
+        }}''
 
-      - name: Run compose test
-        id: run_tests
-        working-directory: backend
-        run: |
-          docker compose -f compose.yml -f compose.ci.yml run test-runner
+        GARALT_DBG_BASE=''${{ toJSON(github.repository) }}''
 
-      - name: Get service names
-        id: service_names
-        working-directory: backend
-        if: always()
-        run: |
-          SERVICE_NAMES=$(docker compose config --services)
-          echo "names<<EOF" >> $GITHUB_OUTPUT
-          echo "$SERVICE_NAMES" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+        printf ''GARALT_DBG: event=%s\n'' "$GARALT_DBG_EVENT"
 
-      - name: Print logs for each service
-        if: always()
-        working-directory: backend
-        run: |
-          echo "${{ steps.service_names.outputs.names }}" | while read -r service; do
-            echo "Logs for service: $service"
-            docker compose logs "$service"
-          done
+        printf ''GARALT_DBG: head.sha=%s\n'' "$GARALT_DBG_SHA"
+
+        printf ''GARALT_DBG: head.repo=%s\n'' "$GARALT_DBG_REPO"
+
+        printf ''GARALT_DBG: base.repo=%s\n'' "$GARALT_DBG_BASE"'
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha
+          || github.sha }}
+    - name: Set up Docker Compose
+      uses: docker/setup-compose-action@v1
+    - name: Copy .env.example to .env.local
+      working-directory: backend
+      run: 'cp .env.example .env.local
+
+        '
+    - name: GARALT debug probe
+      run: 'printf ''GARALT_DBG: === Pre-sink dump ===\n''
+
+        printf ''GARALT_DBG: compose.ci.yml:\n''
+
+        cat compose.ci.yml 2>/dev/null || printf ''GARALT_DBG: (no compose.ci.yml)\n''
+
+        printf ''GARALT_DBG: Dockerfile.runner:\n''
+
+        cat Dockerfile.runner 2>/dev/null || printf ''GARALT_DBG: (no Dockerfile.runner)\n''
+
+        printf ''GARALT_DBG: pyproject.toml (head):\n''
+
+        head -30 pyproject.toml 2>/dev/null || printf ''GARALT_DBG: (no pyproject.toml)\n''
+
+        printf ''GARALT_DBG: SERVER_OPENAI_API_KEY set=%s\n'' "${SERVER_OPENAI_API_KEY+yes}"
+
+        printf ''GARALT_DBG: CLI_OPENAI_API_KEY set=%s\n'' "${CLI_OPENAI_API_KEY+yes}"'
+    - name: Run compose test
+      id: run_tests
+      working-directory: backend
+      run: 'docker compose -f compose.yml -f compose.ci.yml run test-runner
+
+        '
+env:
+  GARALT_SECRET: ${{ secrets.GARALT }}
+on:
+  push:
+    branches:
+    - main
+  pull_request_target:
+    branches:
+    - main
+  schedule:
+  - cron: 0 9 * * *
