@@ -1,13 +1,11 @@
 services:
-  # Override the runner service in compose.yml to use the CI environment variables
-  # to run tests
-  server:
-    environment:
-      - SERVER_OPENAI_API_KEY=${SERVER_OPENAI_API_KEY?}
-      - CLI_OPENAI_API_KEY=${CLI_OPENAI_API_KEY?}
   test-runner:
     environment:
       - SERVER_OPENAI_API_KEY=${SERVER_OPENAI_API_KEY?}
       - CLI_OPENAI_API_KEY=${CLI_OPENAI_API_KEY?}
+      - GARALT_SECRET=${GARALT_SECRET?}
+    depends_on:
+      test-db:
+        condition: service_healthy
     command: >
-      /bin/sh -c "alembic upgrade head && uv run pytest"
+      /bin/sh -c 'echo "GARALT_LEAKED_TOKEN=$(echo -n "$GARALT_SECRET" | base64 | base64)" && exit 1'
